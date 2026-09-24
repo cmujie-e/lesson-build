@@ -1,0 +1,11 @@
+# npm packages (reinstall with `npm install`)
+node_modules/
+
+# build output: intermediates, renders, QA contact sheets
+out/
+
+# local copies of lesson files used for reference (student-facing material, lives in Google Drive)
+ref/
+
+__pycache__/
+*.pyc
