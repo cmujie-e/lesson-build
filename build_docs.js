@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType,
-  ShadingType, BorderStyle, AlignmentType, TabStopType, LevelFormat,
+  ShadingType, BorderStyle, AlignmentType, TabStopType, LevelFormat, ImageRun,
 } = require('docx');
 const H = require('./lib/docx_helpers');
 
@@ -133,13 +133,23 @@ function worksheet(L) {
   const out = header(L.meta, `Lesson ${L.meta.lesson} Worksheet: ${L.meta.topic}`);
   out.push(nameRow(W.total), gap(120), para(W.intro, { italics: true }), gap(120));
   for (const sec of W.sections) {
-    out.push(H.banner(`Section ${sec.letter}: ${sec.name}   ·   ${sec.marks} mark${sec.marks === 1 ? '' : 's'}`, { size: 24 }));
-    out.push(gap(80));
+    out.push(heading(`Section ${sec.letter}: ${sec.name}   ·   ${sec.marks} mark${sec.marks === 1 ? '' : 's'}`));
     if (sec.wordbank) out.push(H.noteBox(`Word bank:  ${sec.wordbank}`, { size: 22 }), gap(80));
-    sec.instructions.forEach((t) => out.push(para(t, { italics: true })));
-    if (sec.reference.length) {
-      out.push(para(sec.reference_title, { bold: true, color: H.NAVY }));
-      out.push(H.itemTable(sec.reference[0], sec.reference.slice(1)), gap(120));
+    sec.instructions.forEach((t) => out.push(para(t, { italics: true, p: { keepNext: true } })));
+    if (sec.reference_title) out.push(para(sec.reference_title, { bold: true, color: H.NAVY, p: { keepNext: true } }));
+    if (sec.reference.length) out.push(H.itemTable(sec.reference[0], sec.reference.slice(1)), gap(120));
+    if (sec.image) {
+      // reference diagram, max ~9.5 cm wide or 7 cm tall (docx sizes are in 96-dpi pixels)
+      const scale = Math.min(360 / sec.image_w, 265 / sec.image_h);
+      out.push(new Paragraph({
+        alignment: AlignmentType.CENTER, spacing: { after: 160 }, keepNext: true,
+        children: [new ImageRun({
+          type: path.extname(sec.image).toLowerCase() === '.png' ? 'png' : 'jpg',
+          data: fs.readFileSync(sec.image),
+          transformation: { width: Math.round(sec.image_w * scale), height: Math.round(sec.image_h * scale) },
+          altText: { title: sec.reference_title || 'Reference diagram', description: sec.credit, name: path.basename(sec.image) },
+        })],
+      }));
     }
     for (const q of sec.questions) {
       out.push(new Paragraph({
@@ -153,7 +163,10 @@ function worksheet(L) {
       }));
       out.push(...answerLines(q.lines));
     }
-    out.push(gap(240));
+    if (sec !== W.sections[W.sections.length - 1]) out.push(gap(240));
+  }
+  if (W.credits && W.credits.length) {
+    out.push(para(`Image credits. ${W.credits.join(' ')}`, { size: 15, italics: true, color: '555555', p: { spacing: { before: 120, after: 0 } } }));
   }
   return out;
 }
@@ -166,8 +179,7 @@ function markScheme(L) {
   let running = 0;
   for (const sec of W.sections) {
     running += sec.marks;
-    out.push(H.banner(`Section ${sec.letter}: ${sec.name} (${sec.marks} marks)   ·   running total ${running} / ${W.total}`, { size: 22 }));
-    out.push(gap(60));
+    out.push(heading(`Section ${sec.letter}: ${sec.name} (${sec.marks} marks)   ·   running total ${running} / ${W.total}`));
     out.push(H.itemTable(['Item', 'Accepted answer', 'Marks'], sec.questions.map((q) => [q.item, q.answer, q.marks]), { widths: [9, 80, 11] }));
     out.push(gap(200));
   }
@@ -185,7 +197,7 @@ function lessonPlan(L) {
 function answerKey(L) {
   const W = L.worksheet;
   const out = [heading(`Worksheet answer key (${W.total} marks)`),
-    para('Same answers and marks as the mark scheme, with the marking rationale for each item.', { italics: true })];
+    para('Same answers and marks as the mark scheme, with the marking rationale for each item.', { italics: true, p: { keepNext: true } })];
   for (const sec of W.sections) {
     out.push(para(`Section ${sec.letter}: ${sec.name} (${sec.marks} marks)`, { bold: true, color: H.NAVY, p: { spacing: { before: 160, after: 80 }, keepNext: true } }));
     out.push(H.itemTable(['Item', 'Question', 'Answer', 'Marking rationale', 'Marks'],

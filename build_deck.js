@@ -106,6 +106,18 @@ function layoutTable(slide, s) {
   const longest = [...Array(ncol).keys()].map((c) => Math.max(...rows.map((r) => (r[c] || '').length), 4));
   const total = longest.reduce((a, b) => a + b, 0);
   const colW = longest.map((l) => (l / total) * AREA.w);
+  // never narrower than the longest single word at 30 pt (~0.21 in per character + cell margins),
+  // or words like "Development" break mid-word; take the extra width from the widest columns
+  const minW = [...Array(ncol).keys()].map((c) =>
+    Math.max(...rows.map((r) => Math.max(...(r[c] || '').split(/\s+/).map((w) => w.length)))) * 0.21 + 0.3);
+  for (let pass = 0; pass < 3; pass++) {
+    const short = colW.map((w, c) => Math.max(0, minW[c] - w));
+    const need = short.reduce((a, b) => a + b, 0);
+    if (need <= 0.001) break;
+    const spare = colW.map((w, c) => Math.max(0, w - minW[c]));
+    const spareTotal = spare.reduce((a, b) => a + b, 0);
+    colW.forEach((w, c) => { colW[c] = w + short[c] - (spareTotal ? (spare[c] / spareTotal) * need : 0); });
+  }
   const data = rows.map((r, ri) => r.map((cell) => ({
     text: cell,
     options: ri === 0

@@ -141,11 +141,18 @@ def attach_images(slides, base):
     in its slide's notes and append the exempt "Image credits" slide. Fails if an image
     is missing or has no credit, so an uncredited image can never reach a deck."""
     from PIL import Image
+    draft = os.environ.get("LESSON_DRAFT") == "1"  # pre-approval check: build without downloaded images
     credits = []
     for n, s in enumerate(slides, 1):
         if not s["image"]:
             continue
         path = os.path.normpath(os.path.join(base, s["image"]))
+        if not os.path.exists(path) and draft:
+            print(f"  DRAFT: slide {n} ({s['id']}) image not downloaded yet; built without it")
+            s["image"] = None
+            s["layout"] = "bullets" if s["bullets"] else "text"
+            credits.append(f"Slide {n}: {s['credit']} [not downloaded]")
+            continue
         if not os.path.exists(path):
             sys.exit(f"Slide {n} ({s['id']}): image not found: {path}")
         if not s["credit"]:
@@ -179,7 +186,7 @@ def parse_worksheet(lines):
         elif line.startswith("## "):
             letter, _, name = line[3:].partition("|")
             sec = {"letter": letter.strip(), "name": name.strip(), "wordbank": "", "instructions": [],
-                   "reference_title": "", "reference": [], "questions": []}
+                   "reference_title": "", "reference": [], "image": None, "credit": None, "questions": []}
             ws["sections"].append(sec)
             q = None
         elif sec is None:
@@ -190,6 +197,10 @@ def parse_worksheet(lines):
                 sec["wordbank"] = line[9:].strip()
             elif line.startswith("reference:"):
                 sec["reference_title"] = line[10:].strip()
+            elif line.startswith("image:"):
+                sec["image"] = line[6:].strip()
+            elif line.startswith("credit:"):
+                sec["credit"] = line[7:].strip()
             elif line.lstrip().startswith("|"):
                 sec["reference"].append(line)
             elif line.strip():
@@ -214,6 +225,25 @@ def parse_worksheet(lines):
     return ws
 
 
+def attach_worksheet_images(ws, base):
+    """Worksheet section images: resolve path, record size, require a credit. The credits
+    are printed as a line at the foot of the worksheet (Chapter 3 decision, 2026-09-25)."""
+    from PIL import Image
+    ws["credits"] = []
+    for sec in ws["sections"]:
+        if not sec["image"]:
+            continue
+        path = os.path.normpath(os.path.join(base, sec["image"]))
+        if not os.path.exists(path):
+            sys.exit(f"Worksheet section {sec['letter']}: image not found: {path}")
+        if not sec["credit"]:
+            sys.exit(f"Worksheet section {sec['letter']}: image has no credit: line")
+        with Image.open(path) as im:
+            sec["image_w"], sec["image_h"] = im.size
+        sec["image"] = path
+        ws["credits"].append(f"Section {sec['letter']}: {sec['credit']}")
+
+
 def resolve_refs(obj, ids):
     def sub(s):
         return re.sub(r"@([a-z0-9]+(?:-[a-z0-9]+)*)",
@@ -228,10 +258,14 @@ def resolve_refs(obj, ids):
 
 
 def main(src, dst):
-    with open(src, encoding="utf-8") as f:
+    # utf-8-sig: files saved by Windows tools often start with a byte-order mark, which would hide the front matter
+    with open(src, encoding="utf-8-sig") as f:
         front, sections = split_sections(f.read())
-    slides = attach_images(parse_slides(sections.get("SLIDES", [])), os.path.dirname(os.path.abspath(src)))
+    base = os.path.dirname(os.path.abspath(src))
+    slides = attach_images(parse_slides(sections.get("SLIDES", [])), base)
     ids = {s["id"]: i for i, s in enumerate(slides, 1)}
+    worksheet = parse_worksheet(sections.get("WORKSHEET", []))
+    attach_worksheet_images(worksheet, base)
     if len(ids) != len(slides):
         sys.exit("Duplicate slide id in content.md")
     ms_note = next((l[5:].strip() for l in sections.get("MARK SCHEME", []) if l.startswith("note:")), "")
@@ -239,7 +273,7 @@ def main(src, dst):
     lesson = {
         "meta": front,
         "slides": slides,
-        "worksheet": parse_worksheet(sections.get("WORKSHEET", [])),
+        "worksheet": worksheet,
         "mark_scheme_note": ms_note,
         "lesson_plan": parse_subsections(sections.get("LESSON PLAN", [])),
         "assessment_plan": parse_subsections(sections.get("ASSESSMENT PLAN", [])),
