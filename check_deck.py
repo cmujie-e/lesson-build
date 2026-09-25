@@ -13,6 +13,8 @@ A "word" is a whitespace-separated token containing at least one letter or digit
 separators like "•" or "–" are not counted.
 Question slides are detected by their tag (DO NOW, CFU, STOP & CHECK, STRETCH, EXIT TICKET);
 their notes must contain "Answer:".
+Every slide with a picture must have "Image:" in its notes and a "Slide N:" line on the
+closing credits slide (tag CREDITS), which is itself exempt from the word and font rules.
 """
 import re
 import sys
@@ -52,16 +54,30 @@ def is_content(sh, named):
     return not " ".join(f.text for f in frames(sh)).strip().isdigit()
 
 
+def pictures(shapes):
+    for sh in shapes:
+        if sh.shape_type == 6:
+            yield from pictures(sh.shapes)
+        elif sh.shape_type == 13:  # MSO_SHAPE_TYPE.PICTURE
+            yield sh
+
+
 def check(path):
     prs = Presentation(path)
     print(f"\n{path}")
-    print(f"{'Slide':>5} | {'Words':>5} | {'<=35':<4} | {'Notes':<5} | {'Answer':<6} | {'Content pt':<14} | Title")
-    print("-" * 104)
-    over, missing, no_answer, off_font = [], [], [], []
+    print(f"{'Slide':>5} | {'Words':>5} | {'<=35':<4} | {'Notes':<5} | {'Answer':<6} | {'Image':<6} | {'Content pt':<14} | Title")
+    print("-" * 113)
+    over, missing, no_answer, off_font, uncredited = [], [], [], [], []
+    credits_text = ""
+    for slide in prs.slides:
+        if any(s.name == "Tag" and s.text_frame.text.strip() == "CREDITS" for s in text_shapes(slide.shapes)):
+            credits_text = " ".join(f.text for s in text_shapes(slide.shapes) for f in frames(s))
     for i, slide in enumerate(prs.slides, 1):
         shapes = list(text_shapes(slide.shapes))
         named = any(s.name in CHROME for s in shapes)
-        content = [s for s in shapes if is_content(s, named)]
+        # the closing credits slide is exempt from the word and font rules (CLAUDE.md)
+        exempt = any(s.name == "Tag" and s.text_frame.text.strip() == "CREDITS" for s in shapes)
+        content = [] if exempt else [s for s in shapes if is_content(s, named)]
         words = sum(len([w for w in f.text.split() if WORD.search(w)]) for s in content for f in frames(s))
         sizes = sorted({r.font.size.pt for s in content for f in frames(s)
                         for p in f.paragraphs for r in p.runs if r.font.size and r.text.strip()})
@@ -80,17 +96,23 @@ def check(path):
             no_answer.append(i)
         if any(sz != FONT_PT for sz in sizes):
             off_font.append(i)
+        n_pics = len(list(pictures(slide.shapes)))
+        credited = "Image:" in notes and f"Slide {i}:" in credits_text
+        if n_pics and not credited:
+            uncredited.append(i)
         ans = ("yes" if has_answer else "NO") if is_q else "-"
-        size_txt = ", ".join(f"{sz:g}" for sz in sizes) or "-"
-        print(f"{i:>5} | {words:>5} | {'OK' if words <= WORD_LIMIT else 'OVER':<4} | {'yes' if notes else 'NO':<5} | "
-              f"{ans:<6} | {size_txt:<14} | {title.replace(chr(10), ' ')[:42]}")
-    print("-" * 104)
+        img = ("yes" if credited else "NO") if n_pics else "-"
+        size_txt = "exempt" if exempt else (", ".join(f"{sz:g}" for sz in sizes) or "-")
+        print(f"{i:>5} | {'-' if exempt else words:>5} | {'-' if exempt else ('OK' if words <= WORD_LIMIT else 'OVER'):<4} | "
+              f"{'yes' if notes else 'NO':<5} | {ans:<6} | {img:<6} | {size_txt:<14} | {title.replace(chr(10), ' ')[:42]}")
+    print("-" * 113)
     print(f"{len(prs.slides)} slides")
     print(f"  Over {WORD_LIMIT} words (title excluded) : {len(over)}  {over}")
     print(f"  Missing speaker notes         : {len(missing)}  {missing}")
     print(f"  Question slides with no answer: {len(no_answer)}  {no_answer}")
     print(f"  Content text not {FONT_PT} pt        : {len(off_font)}  {off_font}")
-    return not (over or missing or no_answer or off_font)
+    print(f"  Images without credit         : {len(uncredited)}  {uncredited}  (Image column: credit in notes AND on credits slide)")
+    return not (over or missing or no_answer or off_font or uncredited)
 
 
 if __name__ == "__main__":

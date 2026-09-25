@@ -7,11 +7,12 @@ ASSESSMENT PLAN, GLOSSARY, GLOSSARY NOTES. See the format guide at the top of co
 "@id" references to slide ids are replaced with slide numbers everywhere.
 """
 import json
+import os
 import re
 import sys
 
 SLIDE_HEAD = re.compile(r"^##\s+(\w+)\s*\|\s*(.+?)\s*\{#([a-z0-9-]+)\}\s*$")
-KEY_LINE = re.compile(r"^(tag|subtitle|diagram):\s*(.*)$")
+KEY_LINE = re.compile(r"^(tag|subtitle|diagram|image|credit):\s*(.*)$")
 
 
 def split_sections(text):
@@ -102,7 +103,7 @@ def parse_slides(lines):
         m = SLIDE_HEAD.match(line)
         if m:
             cur = {"layout": m.group(1), "title": m.group(2), "id": m.group(3),
-                   "tag": None, "subtitle": None, "diagram": None,
+                   "tag": None, "subtitle": None, "diagram": None, "image": None, "credit": None,
                    "bullets": [], "cards": [], "table": [], "text": [], "notes": []}
             slides.append(cur)
             in_notes = False
@@ -132,6 +133,36 @@ def parse_slides(lines):
     for s in slides:
         s["table"] = parse_table(s["table"]) if s["table"] else []
         s["notes"] = "\n".join(s["notes"]).strip()
+    return slides
+
+
+def attach_images(slides, base):
+    """Resolve image paths (relative to content.md), record pixel sizes, put each credit
+    in its slide's notes and append the exempt "Image credits" slide. Fails if an image
+    is missing or has no credit, so an uncredited image can never reach a deck."""
+    from PIL import Image
+    credits = []
+    for n, s in enumerate(slides, 1):
+        if not s["image"]:
+            continue
+        path = os.path.normpath(os.path.join(base, s["image"]))
+        if not os.path.exists(path):
+            sys.exit(f"Slide {n} ({s['id']}): image not found: {path}")
+        if not s["credit"]:
+            sys.exit(f"Slide {n} ({s['id']}): image has no credit: line")
+        with Image.open(path) as im:
+            s["image_w"], s["image_h"] = im.size
+        s["image"] = path
+        s["notes"] = f"{s['notes']}\nImage: {s['credit']}".strip()
+        credits.append(f"Slide {n}: {s['credit']}")
+    if credits:
+        slides.append({
+            "layout": "credits", "title": "Image credits", "id": "credits", "tag": "CREDITS",
+            "subtitle": None, "diagram": None, "image": None, "credit": None,
+            "bullets": credits, "cards": [], "table": [], "text": [],
+            "notes": "Image credits for every image in this deck. This slide is exempt from the 30 pt and "
+                     "35-word rules (Chapter 3 CLAUDE.md). Textbook figures are used under the school's licence.",
+        })
     return slides
 
 
@@ -199,7 +230,7 @@ def resolve_refs(obj, ids):
 def main(src, dst):
     with open(src, encoding="utf-8") as f:
         front, sections = split_sections(f.read())
-    slides = parse_slides(sections.get("SLIDES", []))
+    slides = attach_images(parse_slides(sections.get("SLIDES", [])), os.path.dirname(os.path.abspath(src)))
     ids = {s["id"]: i for i, s in enumerate(slides, 1)}
     if len(ids) != len(slides):
         sys.exit("Duplicate slide id in content.md")

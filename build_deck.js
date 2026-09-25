@@ -18,7 +18,7 @@ const AREA = { x: 0.6, y: 1.4, w: 12.13, h: 5.55 };
 
 const TAG_COLORS = {
   'DO NOW': S.BROWN, 'CFU': S.AMBER, 'STOP & CHECK': S.CORAL,
-  'WORTH KNOWING': S.AMBER, 'STRETCH': S.AMBER, 'EXIT TICKET': S.CORAL,
+  'WORTH KNOWING': S.AMBER, 'STRETCH': S.AMBER, 'EXIT TICKET': S.CORAL, 'CREDITS': S.WHITE,
 };
 const tagColor = (tag) => TAG_COLORS[tag] || S.ICE_BLUE; // never NAVY on the navy bar
 const boxFill = (tag) => (tag === 'CFU' ? S.CFU_BG : tag === 'STOP & CHECK' ? S.HINGEPOINT_BG : S.LIGHT_GREY);
@@ -41,7 +41,7 @@ function chrome(slide, s, pageNum, footer) {
     slide.addText(s.tag, {
       x: 10.73, y: 0.28, w: 2.15, h: 0.5, objectName: 'Tag',
       fontFace: 'Calibri', fontSize: 13, bold: true, align: 'center', valign: 'middle',
-      color: [S.ICE_BLUE, S.AMBER].includes(fill) ? S.NAVY : S.WHITE,
+      color: [S.ICE_BLUE, S.AMBER, S.WHITE].includes(fill) ? S.NAVY : S.WHITE,
     });
   }
   slide.addText(footer, { x: 0.4, y: 7.15, w: 8.0, h: 0.3, objectName: 'Footer', fontFace: 'Calibri', fontSize: 10, color: S.NAVY });
@@ -188,7 +188,46 @@ function layoutDiagram(slide, s) {
   else throw new Error(`Unknown diagram: ${s.diagram}`);
 }
 
-const LAYOUTS = { text: layoutText, bullets: layoutBullets, cards: layoutCards, table: layoutTable, diagram: layoutDiagram };
+/** Largest box with the image's aspect ratio that fits inside (w, h), centred in it. */
+function fit(s, x, y, w, h) {
+  const r = s.image_w / s.image_h;
+  const iw = Math.min(w, h * r), ih = iw / r;
+  return { x: x + (w - iw) / 2, y: y + (h - ih) / 2, w: iw, h: ih };
+}
+
+/**
+ * Text (bullets and/or plain lines) plus one image. Wide images (aspect >= 2.2, e.g. the
+ * DVD layer diagram) go full-width under the text; everything else sits on the right.
+ */
+function layoutImage(slide, s) {
+  const runs = [...paraRuns(s.text), ...paraRuns(s.bullets, { bullet: true })];
+  runs.forEach((r, i) => { r.options.breakLine = i < runs.length - 1; });
+  const wide = s.image_w / s.image_h >= 2.2;
+  const img = { path: s.image, altText: s.credit };
+  if (wide) {
+    const textH = 2.75;
+    slide.addText(runs, { x: AREA.x, y: AREA.y, w: AREA.w, h: textH, ...BODY, valign: 'top' });
+    slide.addImage({ ...img, ...fit(s, AREA.x, AREA.y + textH + 0.15, AREA.w, AREA.h - textH - 0.15) });
+  } else {
+    // landscape images (e.g. Figure 3.7 with its small labels) get more width than portrait ones
+    const textW = !runs.length ? 0 : s.image_w / s.image_h >= 1.3 ? 5.5 : 6.3;
+    if (runs.length) slide.addText(runs, { x: AREA.x, y: AREA.y, w: textW, h: AREA.h, ...BODY, valign: 'top' });
+    const gap = runs.length ? 0.35 : 0;
+    slide.addImage({ ...img, ...fit(s, AREA.x + textW + gap, AREA.y, AREA.w - textW - gap, AREA.h) });
+  }
+}
+
+/** Closing "Image credits" slide: small text by design, exempt from the 30 pt / 35-word rules. */
+function layoutCredits(slide, s) {
+  slide.addText(s.bullets.map((t, i) => ({ text: t, options: { breakLine: i < s.bullets.length - 1, paraSpaceAfter: 6 } })), {
+    ...AREA, fontFace: 'Calibri', fontSize: 13, color: S.NAVY, valign: 'top', objectName: 'Credits',
+  });
+}
+
+const LAYOUTS = {
+  text: layoutText, bullets: layoutBullets, cards: layoutCards, table: layoutTable,
+  diagram: layoutDiagram, image: layoutImage, credits: layoutCredits,
+};
 
 async function main(src, out) {
   const lesson = JSON.parse(fs.readFileSync(src, 'utf8'));
