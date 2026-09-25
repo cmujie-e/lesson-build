@@ -5,13 +5,15 @@ Usage:
   python lesson.py draft <content.md>                   same, before images are downloaded;
                                                         output goes to out/ only, never the lesson folder
   python lesson.py check <content.md> [output_folder]   checks and inspection sheets only
+  python lesson.py outline <content.md>                 one-page review summary (out/<lesson>/review.md)
 
 output_folder defaults to the folder holding content.md. The course rules (word limit, font
 size, which documents, file names, lesson length) come from the nearest course.json above
 content.md. Stops at the first failed step; exit code 0 only if every check passes.
 
 Steps: parse content.md -> slide deck -> Word documents -> glossary -> PDFs -> render pages
--> slide check -> bundle check -> contact sheets (out/<lesson>/qa) for visual inspection.
+-> slide check -> bundle check -> layout check -> glossary consistency across lessons
+-> contact sheets (out/<lesson>/qa) for visual inspection.
 """
 import glob
 import json
@@ -22,9 +24,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PY = sys.executable
-NODE = shutil.which("node") or r"C:\Program Files\nodejs\node.exe"
-SOFFICE = shutil.which("soffice") or r"C:\Program Files\LibreOffice\program\soffice.com"
-PDFTOPPM = shutil.which("pdftoppm") or r"C:\poppler\poppler-26.09.0\Library\bin\pdftoppm.exe"
+from toolpaths import NODE, SOFFICE
+from toolpaths import PDFTOPPM  # poppler, not Git's xpdf copy (see toolpaths.py)
 WORD_TYPES = {"speaker_notes", "worksheet", "mark_scheme", "lesson_plan", "assessment_plan"}
 KNOWN_TYPES = WORD_TYPES | {"deck", "glossary"}
 
@@ -96,14 +97,16 @@ def build(content, dest, work, draft):
     return L, files
 
 
-def render_and_check(dest, work, L, files):
+def render_and_check(dest, work, L, files, content):
     print("6. Render pages")
     render, qa = os.path.join(work, "render"), os.path.join(work, "qa")
     for d in (render, qa):
         os.makedirs(d, exist_ok=True)
-    for f in files.values():
+    pdfs = {}
+    for t, f in files.items():
         path = os.path.join(dest, f)
         pdf = path if f.lower().endswith(".pdf") else to_pdf(path, work)
+        pdfs[t] = pdf
         stem = os.path.splitext(f)[0]
         for old in glob.glob(os.path.join(render, f"{stem}-*.jpg")) + glob.glob(os.path.join(qa, f"{stem}_*.jpg")):
             os.remove(old)
@@ -118,15 +121,23 @@ def render_and_check(dest, work, L, files):
         ok &= run(PY, "check_deck.py", "--config", lj, os.path.join(dest, files["deck"]), check=False) == 0
     print("\n8. Bundle check")
     ok &= run(PY, "check_bundle.py", dest, lj, check=False) == 0
+    print("\n9. Layout check")
+    docs = [("sheet:" if t == "glossary" else "") + p for t, p in pdfs.items() if t != "deck"]
+    ok &= run(PY, "check_layout.py", lj, pdfs.get("deck", "-"), *docs, check=False) == 0
+    if "glossary" in files:
+        print("\n10. Glossary consistency")
+        ok &= run(PY, "check_glossary.py", content, check=False) == 0
     print(f"\nInspection sheets: {qa}")
     print("RESULT:", "PASS" if ok else "FAIL")
     return ok
 
 
 def main():
-    if len(sys.argv) < 3 or sys.argv[1] not in ("build", "draft", "check"):
+    if len(sys.argv) < 3 or sys.argv[1] not in ("build", "draft", "check", "outline"):
         sys.exit(__doc__)
     mode, content = sys.argv[1], os.path.abspath(sys.argv[2])
+    if mode == "outline":
+        sys.exit(run(PY, "outline.py", content, check=False))
     if mode == "draft":
         dest = os.path.join(work_dir(os.path.dirname(content), True), "deliverables")
         work = work_dir(os.path.dirname(content), True)
@@ -138,7 +149,7 @@ def main():
         files = {d["type"]: fill(d["file"], L["meta"]) for d in L["config"]["documents"]}
     else:
         L, files = build(content, dest, work, mode == "draft")
-    sys.exit(0 if render_and_check(dest, work, L, files) else 1)
+    sys.exit(0 if render_and_check(dest, work, L, files, content) else 1)
 
 
 if __name__ == "__main__":

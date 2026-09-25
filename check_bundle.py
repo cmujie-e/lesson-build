@@ -26,7 +26,7 @@ fill = lambda t: re.sub(r"\{(\w+)\}", lambda m: str(L["meta"].get(m.group(1), m.
 files = {d["type"]: fill(d["file"]) for d in cfg["documents"]}
 expected = set(files.values())
 md = MarkItDown()
-PDFTOTEXT = shutil.which("pdftotext") or r"C:\poppler\poppler-26.09.0\Library\bin\pdftotext.exe"
+from toolpaths import PDFTOTEXT  # poppler, not Git's xpdf copy (see toolpaths.py)
 flat = lambda s: re.sub(r"\s+", " ", s).strip()
 
 

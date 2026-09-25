@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import sys
 
-PDFTOTEXT = shutil.which("pdftotext") or r"C:\poppler\poppler-26.09.0\Library\bin\pdftotext.exe"
+from toolpaths import PDFTOTEXT  # poppler, not Git's xpdf copy (see toolpaths.py)
 
 
 def text_of(path):

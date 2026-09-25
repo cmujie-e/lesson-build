@@ -8,6 +8,17 @@ assessment plan. Which documents a course needs, and its slide rules, come from 
 The scripts build and check; they do not write lesson content. Writing `content.md`
 (from the textbook, with facts checked) is the teacher's or Claude's job.
 
+## Workflow: one chapter at a time
+
+1. A chapter (textbook PDF) is uploaded; propose how many lessons it needs.
+2. Write **one chapter plan**, `<chapter folder>\chapter_plan.md` (from
+   `templates\chapter_plan_template.md`): every lesson's scope, objectives, hingepoints,
+   worksheet sections, textbook activities and figures, and image needs. It is reviewed once.
+3. Build the lesson bundles **one at a time**, in order. For each lesson: write `content.md`
+   from the plan, run `factcheck.py` and `lesson.py draft`, review the summary from
+   `lesson.py outline` and the image list, then download, `lesson.py build`, inspect, commit.
+4. Finish one lesson (built, checked, inspected) before starting the next.
+
 ## One-time setup on a new PC
 
 1. Install **Node.js**, **Python 3**, **LibreOffice** and **Git**.
@@ -35,6 +46,13 @@ page to `out\<lesson>\qa` for visual inspection. It stops at the first failure, 
 run while a deliverable is open in Office. `draft` does the same into `out\` only.
 
 Start a new lesson from `templates\content_template.md`; its comment block documents the format.
+Start a new chapter from `templates\chapter_plan_template.md`.
+
+```
+python factcheck.py "<lesson folder>\content.md" "<chapter>.pdf"   # claims not found in the chapter
+python lesson.py outline "<lesson folder>\content.md"               # review summary
+```
+`factcheck.py` also reads the chapter from a `source_pdf:` line in the content.md front matter.
 
 ## Finding images
 
@@ -77,6 +95,11 @@ Document types not listed above (for example a submission sheet) are not built y
 | `build_glossary.py` | Glossary workbook (openpyxl) |
 | `check_deck.py` | Per-slide rules: words, font size, notes, answers, image credits |
 | `check_bundle.py` | Files present, answer keys match, marks add up, timing, placeholders |
+| `check_layout.py` | Rendered pages: slide text overflow, near-empty pages, stranded headings, mid-word breaks |
+| `check_glossary.py` | Same term, same translations, across every lesson under the course.json folder |
+| `factcheck.py` | Lists numbers, figure/table references and textbook quotes not found in the chapter |
+| `outline.py` | One-page review summary (`lesson.py outline`) |
+| `toolpaths.py` | Finds poppler, LibreOffice and Node (skips Git's older xpdf `pdftotext`) |
 | `commons.py` | Wikimedia Commons search, credits and paced downloads |
 | `textbook_figure.py` | Crop a figure from a textbook PDF at print resolution |
 | `snapshot.py` | Text snapshot of a built lesson, for regression tests |

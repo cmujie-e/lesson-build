@@ -14,7 +14,7 @@ import sys
 import tempfile
 from PIL import Image, ImageChops
 
-PDFTOPPM = shutil.which("pdftoppm") or r"C:\poppler\poppler-26.09.0\Library\bin\pdftoppm.exe"
+from toolpaths import PDFTOPPM  # poppler, not Git's xpdf copy (see toolpaths.py)
 
 
 def main(pdf, page, x0, y0, x1, y1, out, dpi=300):
