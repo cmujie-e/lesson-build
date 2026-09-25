@@ -212,15 +212,23 @@ function assessmentPlan(L) {
     ...sectionsToDocx(L.assessment_plan, { worksheet_answer_key: () => answerKey(L) })];
 }
 
+// Word-based document types this builder can make. course.json "documents" chooses which
+// ones a course needs and their file names; lesson.py converts the .pdf ones afterwards.
+const BUILDERS = {
+  speaker_notes: speakerNotes, worksheet, mark_scheme: markScheme,
+  lesson_plan: lessonPlan, assessment_plan: assessmentPlan,
+};
+
+/** "{prefix}_Worksheet.pdf" -> "Lesson2_Worksheet.docx" (Word source for every Word/PDF document). */
+const docxName = (tmpl, meta) => tmpl.replace(/\{(\w+)\}/g, (_, k) => meta[k] ?? `{${k}}`).replace(/\.(pdf|docx)$/i, '.docx');
+
 async function main(src, outDir) {
   const L = JSON.parse(fs.readFileSync(src, 'utf8'));
-  const p = L.meta.prefix;
   fs.mkdirSync(outDir, { recursive: true });
-  await save(speakerNotes(L), path.join(outDir, `${p}_Speaker_Notes.docx`));
-  await save(worksheet(L), path.join(outDir, `${p}_Worksheet.docx`));
-  await save(markScheme(L), path.join(outDir, `${p}_Mark_Scheme.docx`));
-  await save(lessonPlan(L), path.join(outDir, `${p}_Lesson_Plan.docx`));
-  await save(assessmentPlan(L), path.join(outDir, `${p}_Assessment_Plan.docx`));
+  for (const doc of (L.config || {}).documents || []) {
+    if (!BUILDERS[doc.type]) continue; // deck and glossary are built elsewhere; lesson.py rejects unknown types
+    await save(BUILDERS[doc.type](L), path.join(outDir, docxName(doc.file, L.meta)));
+  }
 }
 
 main(process.argv[2], process.argv[3]).catch((e) => { console.error(e); process.exit(1); });

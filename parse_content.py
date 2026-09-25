@@ -12,7 +12,24 @@ import re
 import sys
 
 SLIDE_HEAD = re.compile(r"^##\s+(\w+)\s*\|\s*(.+?)\s*\{#([a-z0-9-]+)\}\s*$")
-KEY_LINE = re.compile(r"^(tag|subtitle|diagram|image|credit):\s*(.*)$")
+KEY_LINE = re.compile(r"^(tag|subtitle|diagram|image|credit|source):\s*(.*)$")
+
+
+def find_config(content_path, front):
+    """course.json: the front-matter `config:` path if given, else the nearest course.json in
+    the lesson folder or any folder above it (so one file can cover a chapter or a course)."""
+    base = os.path.dirname(os.path.abspath(content_path))
+    if front.get("config"):
+        return os.path.normpath(os.path.join(base, front["config"]))
+    d = base
+    while True:
+        cand = os.path.join(d, "course.json")
+        if os.path.exists(cand):
+            return cand
+        parent = os.path.dirname(d)
+        if parent == d:
+            sys.exit(f"No course.json found in {base} or any folder above it (see lesson-build/README.md)")
+        d = parent
 
 
 def split_sections(text):
@@ -103,7 +120,7 @@ def parse_slides(lines):
         m = SLIDE_HEAD.match(line)
         if m:
             cur = {"layout": m.group(1), "title": m.group(2), "id": m.group(3),
-                   "tag": None, "subtitle": None, "diagram": None, "image": None, "credit": None,
+                   "tag": None, "subtitle": None, "diagram": None, "image": None, "credit": None, "source": None,
                    "bullets": [], "cards": [], "table": [], "text": [], "notes": []}
             slides.append(cur)
             in_notes = False
@@ -186,7 +203,8 @@ def parse_worksheet(lines):
         elif line.startswith("## "):
             letter, _, name = line[3:].partition("|")
             sec = {"letter": letter.strip(), "name": name.strip(), "wordbank": "", "instructions": [],
-                   "reference_title": "", "reference": [], "image": None, "credit": None, "questions": []}
+                   "reference_title": "", "reference": [], "image": None, "credit": None, "source": None,
+                   "questions": []}
             ws["sections"].append(sec)
             q = None
         elif sec is None:
@@ -201,6 +219,8 @@ def parse_worksheet(lines):
                 sec["image"] = line[6:].strip()
             elif line.startswith("credit:"):
                 sec["credit"] = line[7:].strip()
+            elif line.startswith("source:"):
+                sec["source"] = line[7:].strip()
             elif line.lstrip().startswith("|"):
                 sec["reference"].append(line)
             elif line.strip():
@@ -270,7 +290,13 @@ def main(src, dst):
         sys.exit("Duplicate slide id in content.md")
     ms_note = next((l[5:].strip() for l in sections.get("MARK SCHEME", []) if l.startswith("note:")), "")
     gloss = [l for l in sections.get("GLOSSARY", []) if l.lstrip().startswith("|")]
+    cfg_path = find_config(src, front)
+    with open(cfg_path, encoding="utf-8-sig") as f:
+        config = json.load(f)
+    front.setdefault("course", config.get("course", ""))
     lesson = {
+        "config": config,
+        "config_path": cfg_path,
         "meta": front,
         "slides": slides,
         "worksheet": worksheet,

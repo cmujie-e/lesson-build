@@ -1,9 +1,11 @@
-"""Per-slide check against Chapter 3 CLAUDE.md.
+"""Per-slide check against the course's slide rules (course.json "slides"; defaults = 9618 Chapter 3).
 
-Reports, for every slide: content word count (limit 35, title excluded), whether speaker
-notes exist, whether question slides' notes contain an answer, and content font sizes (rule: 30 pt).
+Reports, for every slide: content word count (limit, title excluded), whether speaker notes
+exist, whether question slides' notes contain an answer, and content font sizes.
 
-Usage: python check_deck.py <deck.pptx> [<deck.pptx> ...]
+Usage: python check_deck.py [--config lesson.json|course.json] <deck.pptx> [<deck.pptx> ...]
+Without --config the Chapter 3 defaults below are used (35 words, 30 pt), which also works
+for checking decks built elsewhere.
 
 What counts as content: every text shape and table except the slide chrome.
 Chrome = shapes named Title / Tag / Footer / PageNum (set by build_deck.js). For decks built
@@ -28,6 +30,22 @@ FOOTER_ZONE = Inches(7.0)
 WORD = re.compile(r"[A-Za-z0-9]")
 CHROME = {"Title", "Tag", "Footer", "PageNum"}
 QUESTION_TAGS = {"DO NOW", "CFU", "STOP & CHECK", "STRETCH", "EXIT TICKET"}
+ANSWER_MARKER = "Answer:"
+CREDITS_TAG = "CREDITS"
+
+
+def configure(path):
+    """Take the slide rules from a lesson.json (built by parse_content.py) or a course.json."""
+    global WORD_LIMIT, FONT_PT, QUESTION_TAGS, ANSWER_MARKER, CREDITS_TAG
+    import json
+    with open(path, encoding="utf-8-sig") as f:
+        data = json.load(f)
+    s = data.get("config", data).get("slides", {})
+    WORD_LIMIT = s.get("max_words", WORD_LIMIT)
+    FONT_PT = s.get("body_pt", FONT_PT)
+    QUESTION_TAGS = set(s.get("question_tags", QUESTION_TAGS))
+    ANSWER_MARKER = s.get("answer_marker", ANSWER_MARKER)
+    CREDITS_TAG = s.get("credits_tag", CREDITS_TAG)
 
 
 def text_shapes(shapes):
@@ -70,13 +88,13 @@ def check(path):
     over, missing, no_answer, off_font, uncredited = [], [], [], [], []
     credits_text = ""
     for slide in prs.slides:
-        if any(s.name == "Tag" and s.text_frame.text.strip() == "CREDITS" for s in text_shapes(slide.shapes)):
+        if any(s.name == "Tag" and s.text_frame.text.strip() == CREDITS_TAG for s in text_shapes(slide.shapes)):
             credits_text = " ".join(f.text for s in text_shapes(slide.shapes) for f in frames(s))
     for i, slide in enumerate(prs.slides, 1):
         shapes = list(text_shapes(slide.shapes))
         named = any(s.name in CHROME for s in shapes)
         # the closing credits slide is exempt from the word and font rules (CLAUDE.md)
-        exempt = any(s.name == "Tag" and s.text_frame.text.strip() == "CREDITS" for s in shapes)
+        exempt = any(s.name == "Tag" and s.text_frame.text.strip() == CREDITS_TAG for s in shapes)
         content = [] if exempt else [s for s in shapes if is_content(s, named)]
         words = sum(len([w for w in f.text.split() if WORD.search(w)]) for s in content for f in frames(s))
         sizes = sorted({r.font.size.pt for s in content for f in frames(s)
@@ -87,7 +105,7 @@ def check(path):
             title = next((s.text_frame.text for s in shapes if s.top is not None and s.top < TITLE_ZONE and s.has_text_frame), "")
         tag = next((s.text_frame.text.strip() for s in shapes if s.name == "Tag"), "")
         is_q = tag in QUESTION_TAGS
-        has_answer = "Answer:" in notes
+        has_answer = ANSWER_MARKER in notes
         if words > WORD_LIMIT:
             over.append(i)
         if not notes:
@@ -116,6 +134,10 @@ def check(path):
 
 
 if __name__ == "__main__":
-    ok = all([check(p) for p in sys.argv[1:]])
+    args = sys.argv[1:]
+    if args[:1] == ["--config"]:
+        configure(args[1])
+        args = args[2:]
+    ok = all([check(p) for p in args])
     print("\nRESULT:", "PASS" if ok else "FAIL")
     sys.exit(0 if ok else 1)

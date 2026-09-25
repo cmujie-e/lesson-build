@@ -1,0 +1,27 @@
+{
+  "_about": "Machine-readable rules for lesson builds in this folder (read by lesson-build/lesson.py). Mirrors CLAUDE.md here: keep the two in sync.",
+  "course": "Cambridge International AS Level Computer Science (9618)",
+  "lesson_minutes": 70,
+  "min_practice_minutes": 12,
+  "slides": {
+    "max_words": 35,
+    "body_pt": 30,
+    "chrome_pt": { "footer": 10, "page_number": 10, "tag": 13 },
+    "question_tags": ["DO NOW", "CFU", "STOP & CHECK", "STRETCH", "EXIT TICKET"],
+    "answer_marker": "Answer:",
+    "credits_tag": "CREDITS",
+    "tag_colors": {
+      "DO NOW": "BROWN", "CFU": "AMBER", "STOP & CHECK": "CORAL", "WORTH KNOWING": "AMBER",
+      "STRETCH": "AMBER", "EXIT TICKET": "CORAL", "CREDITS": "WHITE", "default": "ICE_BLUE"
+    }
+  },
+  "documents": [
+    { "type": "deck", "file": "{deck_name}.pptx" },
+    { "type": "speaker_notes", "file": "{prefix}_Speaker_Notes.pdf" },
+    { "type": "glossary", "file": "{prefix}_Bilingual_Glossary.xlsx" },
+    { "type": "worksheet", "file": "{prefix}_Worksheet.pdf" },
+    { "type": "mark_scheme", "file": "{prefix}_Mark_Scheme.docx" },
+    { "type": "lesson_plan", "file": "{prefix}_Lesson_Plan.docx" },
+    { "type": "assessment_plan", "file": "{prefix}_Assessment_Plan.docx" }
+  ]
+}

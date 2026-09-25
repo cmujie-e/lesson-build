@@ -14,7 +14,8 @@ per = int(sys.argv[4]) if len(sys.argv) > 4 else 6
 files = sorted(glob.glob(src), key=lambda p: int(re.search(r"-(\d+)\.jpg$", p).group(1)))
 for sheet, start in enumerate(range(0, len(files), per), 1):
     batch = [Image.open(f) for f in files[start:start + per]]
-    w, h = batch[0].size
+    # cell size = largest page, so landscape pages (e.g. the glossary) are not cut off
+    w, h = max(im.width for im in batch), max(im.height for im in batch)
     rows = (len(batch) + cols - 1) // cols
     out = Image.new("RGB", (cols * (w + 10) + 10, rows * (h + 34) + 10), "white")
     d = ImageDraw.Draw(out)

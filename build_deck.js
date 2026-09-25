@@ -2,31 +2,44 @@
  * Build the lesson slide deck from lesson.json (output of parse_content.py).
  * Usage: node build_deck.js <lesson.json> <out.pptx>
  *
- * Chapter 3 CLAUDE.md rules applied here:
- *   - all content text is 30 pt (BODY_PT); the title may shrink below 30 pt when long
- *   - word limit (35, title excluded) is enforced by check_deck.py, not by shrinking text
- *   - question and answer slides are separate slides in content.md
+ * Course rules come from course.json (lesson.config.slides), e.g. for 9618 Chapter 3:
+ *   - body_pt: all content text size (30); the title may shrink below title_pt when long
+ *   - the word limit is enforced by check_deck.py, not by shrinking text
+ *   - tag_colors / box_colors: palette names from lib/style.js
  * Chrome shapes are named (Title, Tag, Footer, PageNum) so check_deck.py can exclude them.
  */
 const fs = require('fs');
 const PptxGenJS = require('pptxgenjs');
 const S = require('./lib/style');
 
-const BODY_PT = 30;
-const BODY = { fontFace: 'Calibri', fontSize: BODY_PT, color: S.NAVY };
 const AREA = { x: 0.6, y: 1.4, w: 12.13, h: 5.55 };
+// set from course.json in configure(); defaults are the 9618 Chapter 3 house style
+let BODY_PT = 30;
+let BODY = { fontFace: 'Calibri', fontSize: BODY_PT, color: S.NAVY };
+let TITLE_PT = 30;
+let CHROME_PT = { footer: 10, page_number: 10, tag: 13 };
+let TAG_COLORS = { default: 'ICE_BLUE' };
+let BOX_COLORS = { CFU: 'CFU_BG', 'STOP & CHECK': 'HINGEPOINT_BG', default: 'LIGHT_GREY' };
 
-const TAG_COLORS = {
-  'DO NOW': S.BROWN, 'CFU': S.AMBER, 'STOP & CHECK': S.CORAL,
-  'WORTH KNOWING': S.AMBER, 'STRETCH': S.AMBER, 'EXIT TICKET': S.CORAL, 'CREDITS': S.WHITE,
-};
-const tagColor = (tag) => TAG_COLORS[tag] || S.ICE_BLUE; // never NAVY on the navy bar
-const boxFill = (tag) => (tag === 'CFU' ? S.CFU_BG : tag === 'STOP & CHECK' ? S.HINGEPOINT_BG : S.LIGHT_GREY);
+function configure(cfg = {}) {
+  BODY_PT = cfg.body_pt || BODY_PT;
+  BODY = { ...BODY, fontSize: BODY_PT };
+  TITLE_PT = cfg.title_pt || BODY_PT;
+  CHROME_PT = { ...CHROME_PT, ...(cfg.chrome_pt || {}) };
+  TAG_COLORS = { ...TAG_COLORS, ...(cfg.tag_colors || {}) };
+  BOX_COLORS = { ...BOX_COLORS, ...(cfg.box_colors || {}) };
+  for (const name of [...Object.values(TAG_COLORS), ...Object.values(BOX_COLORS)]) {
+    if (!S[name]) throw new Error(`course.json colour "${name}" is not a palette name in lib/style.js`);
+  }
+  if (TAG_COLORS.default === 'NAVY') throw new Error('Default tag colour cannot be NAVY: unreadable on the navy title bar');
+}
+const tagColor = (tag) => S[TAG_COLORS[tag] || TAG_COLORS.default];
+const boxFill = (tag) => S[BOX_COLORS[tag] || BOX_COLORS.default];
 
 function titlePt(title) {
-  if (title.length > 54) return 22;
-  if (title.length > 46) return 26;
-  return 30;
+  if (title.length > 54) return Math.min(TITLE_PT, 22);
+  if (title.length > 46) return Math.min(TITLE_PT, 26);
+  return TITLE_PT;
 }
 
 function chrome(slide, s, pageNum, footer) {
@@ -40,12 +53,12 @@ function chrome(slide, s, pageNum, footer) {
     slide.addShape('roundRect', { x: 10.73, y: 0.28, w: 2.15, h: 0.5, rectRadius: 0.1, fill: { color: fill }, line: { type: 'none' } });
     slide.addText(s.tag, {
       x: 10.73, y: 0.28, w: 2.15, h: 0.5, objectName: 'Tag',
-      fontFace: 'Calibri', fontSize: 13, bold: true, align: 'center', valign: 'middle',
+      fontFace: 'Calibri', fontSize: CHROME_PT.tag, bold: true, align: 'center', valign: 'middle',
       color: [S.ICE_BLUE, S.AMBER, S.WHITE].includes(fill) ? S.NAVY : S.WHITE,
     });
   }
-  slide.addText(footer, { x: 0.4, y: 7.15, w: 8.0, h: 0.3, objectName: 'Footer', fontFace: 'Calibri', fontSize: 10, color: S.NAVY });
-  slide.addText(String(pageNum), { x: 12.43, y: 7.15, w: 0.5, h: 0.3, objectName: 'PageNum', fontFace: 'Calibri', fontSize: 10, color: S.NAVY, align: 'right' });
+  slide.addText(footer, { x: 0.4, y: 7.15, w: 8.0, h: 0.3, objectName: 'Footer', fontFace: 'Calibri', fontSize: CHROME_PT.footer, color: S.NAVY });
+  slide.addText(String(pageNum), { x: 12.43, y: 7.15, w: 0.5, h: 0.3, objectName: 'PageNum', fontFace: 'Calibri', fontSize: CHROME_PT.page_number, color: S.NAVY, align: 'right' });
 }
 
 function paraRuns(lines, { bullet = false } = {}) {
@@ -109,7 +122,7 @@ function layoutTable(slide, s) {
   // never narrower than the longest single word at 30 pt (~0.21 in per character + cell margins),
   // or words like "Development" break mid-word; take the extra width from the widest columns
   const minW = [...Array(ncol).keys()].map((c) =>
-    Math.max(...rows.map((r) => Math.max(...(r[c] || '').split(/\s+/).map((w) => w.length)))) * 0.21 + 0.3);
+    Math.max(...rows.map((r) => Math.max(...(r[c] || '').split(/\s+/).map((w) => w.length)))) * 0.21 * (BODY_PT / 30) + 0.3);
   for (let pass = 0; pass < 3; pass++) {
     const short = colW.map((w, c) => Math.max(0, minW[c] - w));
     const need = short.reduce((a, b) => a + b, 0);
@@ -243,6 +256,7 @@ const LAYOUTS = {
 
 async function main(src, out) {
   const lesson = JSON.parse(fs.readFileSync(src, 'utf8'));
+  configure((lesson.config || {}).slides);
   const pres = new PptxGenJS();
   pres.layout = 'LAYOUT_WIDE';
   pres.title = `${lesson.meta.deck_name}`;
