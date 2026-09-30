@@ -69,13 +69,14 @@ const heading = (text) => new Paragraph({
 
 function sectionsToDocx(sections, placeholders = {}) {
   const out = [];
-  for (const s of sections) {
+  sections.forEach((s, i) => {
     const ph = s.blocks.find((b) => b.type === 'placeholder');
-    if (ph) { out.push(...placeholders[ph.name]()); continue; }
+    if (ph) { out.push(...placeholders[ph.name]()); return; }
     if (s.heading) out.push(heading(s.heading));
     out.push(...blocksToDocx(s.blocks));
-    out.push(gap(200));
-  }
+    // no spacer after the last section: when a page is full it spills onto a blank page
+    if (i < sections.length - 1) out.push(gap(200));
+  });
   return out;
 }
 

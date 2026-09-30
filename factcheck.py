@@ -48,6 +48,7 @@ def expand_units(s):
 
 
 def norm(s):
+    s = re.sub(r"(\d)[   ](\d{3})\b", r"\1\2", s)  # the book writes 32 767; slides write 32,767
     s = expand_units(s)
     s = s.replace("\u00ad", "").replace("μ", "µ").replace("−", "-").replace("–", "-").replace("’", "'")
     s = re.sub(r"(\d),(\d{3})", r"\1\2", s)          # 7,200 -> 7200
