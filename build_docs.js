@@ -131,12 +131,13 @@ function nameRow(total) {
 
 /**
  * A worksheet diagram (section reference or per-question), max ~9.5 cm wide or 7 cm tall
- * (docx sizes are in 96-dpi pixels); wide strips (aspect >= 2.5, e.g. a row of symbols or a
- * long circuit) may use the full text width. keepNext holds it to the lines that follow.
+ * (docx sizes are in 96-dpi pixels); wide strips (aspect >= 2.5, e.g. a row of symbols) may use
+ * the full text width; an explicit width: overrides both. keepNext holds it to the lines that follow.
  */
 function worksheetImage(obj, title, before = 0) {
-  const maxW = obj.image_w / obj.image_h >= 2.5 ? 640 : 360;
-  const scale = Math.min(maxW / obj.image_w, 265 / obj.image_h);
+  // "width: <cm>" in content.md sets the printed width (capped at the text width, 17 cm)
+  const maxW = obj.width ? Math.min(obj.width * 37.8, 640) : obj.image_w / obj.image_h >= 2.5 ? 640 : 360;
+  const scale = Math.min(maxW / obj.image_w, (obj.width ? 400 : 265) / obj.image_h);
   return new Paragraph({
     alignment: AlignmentType.CENTER, spacing: { before, after: 160 }, keepNext: true,
     children: [new ImageRun({
@@ -156,9 +157,10 @@ function worksheet(L) {
     out.push(heading(`Section ${sec.letter}: ${sec.name}   ·   ${sec.marks} mark${sec.marks === 1 ? '' : 's'}`));
     if (sec.wordbank) out.push(H.noteBox(`Word bank:  ${sec.wordbank}`, { size: 22 }), gap(80));
     sec.instructions.forEach((t) => out.push(para(t, { italics: true, p: { keepNext: true } })));
+    // a section image comes before its reference table (e.g. a circuit, then the table to complete for it)
+    if (sec.image) out.push(worksheetImage(sec, sec.reference_title || 'Reference diagram'));
     if (sec.reference_title) out.push(para(sec.reference_title, { bold: true, color: H.NAVY, p: { keepNext: true } }));
     if (sec.reference.length) out.push(H.itemTable(sec.reference[0], sec.reference.slice(1), { keepTogether: true }), gap(120));
-    if (sec.image) out.push(worksheetImage(sec, sec.reference_title || 'Reference diagram'));
     for (const q of sec.questions) {
       out.push(new Paragraph({
         spacing: { before: 200, after: 40 }, keepNext: true,

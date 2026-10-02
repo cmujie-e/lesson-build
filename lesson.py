@@ -31,7 +31,9 @@ KNOWN_TYPES = WORD_TYPES | {"deck", "glossary"}
 
 
 def run(*args, quiet=False, check=True):
-    r = subprocess.run([str(a) for a in args], cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    # children print UTF-8 (slide titles may hold arrows etc.); without this a pipe defaults to cp1252 on Windows
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    r = subprocess.run([str(a) for a in args], cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     if r.stdout.strip() and not quiet:
         print(r.stdout.rstrip())
     if check and r.returncode != 0:

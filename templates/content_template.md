@@ -34,6 +34,7 @@ WORKSHEET  "## <letter> | <section name>", optional lines: wordbank:, reference:
   a "|" table (reference data), image: + credit: (+ source:), plain instruction lines.
   Then "### <item> | <marks>", question text, answer:, marking:, lines: (answer lines, optional),
   and optionally image: + credit: (+ source:) for a diagram printed under that question only.
+  width: <cm> (section or question) sets an image's printed width; default ~9.5 cm, 17 cm for wide strips.
   Section and worksheet totals are added up automatically.
 
 LESSON PLAN / ASSESSMENT PLAN  "## Heading" sections holding paragraphs, "- " bullets or "|" tables.

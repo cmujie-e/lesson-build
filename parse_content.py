@@ -198,12 +198,12 @@ def parse_worksheet(lines):
         if line.startswith("### "):
             letter, _, marks = line[4:].partition("|")
             q = {"item": letter.strip(), "marks": int(marks.strip()), "text": [], "answer": "",
-                 "marking": "", "lines": None, "image": None, "credit": None, "source": None}
+                 "marking": "", "lines": None, "image": None, "credit": None, "source": None, "width": None}
             sec["questions"].append(q)
         elif line.startswith("## "):
             letter, _, name = line[3:].partition("|")
             sec = {"letter": letter.strip(), "name": name.strip(), "wordbank": "", "instructions": [],
-                   "reference_title": "", "reference": [], "image": None, "credit": None, "source": None,
+                   "reference_title": "", "reference": [], "image": None, "credit": None, "source": None, "width": None,
                    "questions": []}
             ws["sections"].append(sec)
             q = None
@@ -221,15 +221,17 @@ def parse_worksheet(lines):
                 sec["credit"] = line[7:].strip()
             elif line.startswith("source:"):
                 sec["source"] = line[7:].strip()
+            elif line.startswith("width:"):
+                sec["width"] = float(line[6:].strip())
             elif line.lstrip().startswith("|"):
                 sec["reference"].append(line)
             elif line.strip():
                 sec["instructions"].append(line.strip())
         else:
-            for key in ("answer", "marking", "lines", "image", "credit", "source"):
+            for key in ("answer", "marking", "lines", "image", "credit", "source", "width"):
                 if line.startswith(key + ":"):
                     val = line[len(key) + 1:].strip()
-                    q[key] = int(val) if key == "lines" else val
+                    q[key] = int(val) if key == "lines" else float(val) if key == "width" else val
                     break
             else:
                 if line.strip():

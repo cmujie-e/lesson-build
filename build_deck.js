@@ -237,8 +237,10 @@ function layoutImage(slide, s) {
   const wide = s.image_w / s.image_h >= 2.2;
   const img = { path: s.image, altText: s.credit };
   if (wide) {
-    // no text: the image gets the whole content area instead of sitting under an empty text band
-    const textH = runs.length ? 2.75 : 0;
+    // the text band is as tall as its lines need (30 pt + paragraph space is about 0.64"; about
+    // 68 characters fit across the area), so the image gets the rest; no text: the whole area
+    const lines = [...s.text, ...s.bullets].reduce((n, t) => n + Math.max(1, Math.ceil(t.length / 68)), 0);
+    const textH = runs.length ? Math.min(lines * 0.64 + 0.2, AREA.h - 1.5) : 0;
     const gap = runs.length ? 0.15 : 0;
     if (runs.length) slide.addText(runs, { x: AREA.x, y: AREA.y, w: AREA.w, h: textH, ...BODY, valign: 'top' });
     slide.addImage({ ...img, ...fit(s, AREA.x, AREA.y + textH + gap, AREA.w, AREA.h - textH - gap) });
