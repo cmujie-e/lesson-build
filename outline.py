@@ -70,7 +70,7 @@ def main(content):
         img = re.search(r"^image:\s*(.+)$", block, re.M)
         if img:
             head = block.splitlines()[0]
-            where = (re.search(r"\{#([a-z0-9-]+)\}", head) or re.search(r"^##\s+(\w+)", head)).group(1)
+            where = (re.search(r"\{#([a-z0-9-]+)\}", head) or re.search(r"^#+\s+(\w+)", head)).group(1)
             path = os.path.normpath(os.path.join(base, img.group(1).strip()))
             cred = re.search(r"^credit:\s*(.+)$", block, re.M)
             lines.append(f"| {where} | {os.path.basename(path)} | {'yes' if os.path.exists(path) else 'no'} | "

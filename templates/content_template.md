@@ -32,7 +32,8 @@ SLIDES   "## <layout> | <title> {#id}"      ids: lowercase letters, digits, hyph
 
 WORKSHEET  "## <letter> | <section name>", optional lines: wordbank:, reference: <title>,
   a "|" table (reference data), image: + credit: (+ source:), plain instruction lines.
-  Then "### <item> | <marks>", question text, answer:, marking:, lines: (answer lines, optional).
+  Then "### <item> | <marks>", question text, answer:, marking:, lines: (answer lines, optional),
+  and optionally image: + credit: (+ source:) for a diagram printed under that question only.
   Section and worksheet totals are added up automatically.
 
 LESSON PLAN / ASSESSMENT PLAN  "## Heading" sections holding paragraphs, "- " bullets or "|" tables.

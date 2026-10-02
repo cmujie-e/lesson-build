@@ -133,6 +133,8 @@ def render_and_check(dest, work, L, files, content):
 
 
 def main():
+    # output may go to a file or pipe with a non-UTF-8 code page (cp1252), which cannot print the check reports
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if len(sys.argv) < 3 or sys.argv[1] not in ("build", "draft", "check", "outline"):
         sys.exit(__doc__)
     mode, content = sys.argv[1], os.path.abspath(sys.argv[2])

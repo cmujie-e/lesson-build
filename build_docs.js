@@ -129,6 +129,25 @@ function nameRow(total) {
   });
 }
 
+/**
+ * A worksheet diagram (section reference or per-question), max ~9.5 cm wide or 7 cm tall
+ * (docx sizes are in 96-dpi pixels); wide strips (aspect >= 2.5, e.g. a row of symbols or a
+ * long circuit) may use the full text width. keepNext holds it to the lines that follow.
+ */
+function worksheetImage(obj, title, before = 0) {
+  const maxW = obj.image_w / obj.image_h >= 2.5 ? 640 : 360;
+  const scale = Math.min(maxW / obj.image_w, 265 / obj.image_h);
+  return new Paragraph({
+    alignment: AlignmentType.CENTER, spacing: { before, after: 160 }, keepNext: true,
+    children: [new ImageRun({
+      type: path.extname(obj.image).toLowerCase() === '.png' ? 'png' : 'jpg',
+      data: fs.readFileSync(obj.image),
+      transformation: { width: Math.round(obj.image_w * scale), height: Math.round(obj.image_h * scale) },
+      altText: { title, description: obj.credit, name: path.basename(obj.image) },
+    })],
+  });
+}
+
 function worksheet(L) {
   const W = L.worksheet;
   const out = header(L.meta, `Lesson ${L.meta.lesson} Worksheet: ${L.meta.topic}`);
@@ -139,21 +158,7 @@ function worksheet(L) {
     sec.instructions.forEach((t) => out.push(para(t, { italics: true, p: { keepNext: true } })));
     if (sec.reference_title) out.push(para(sec.reference_title, { bold: true, color: H.NAVY, p: { keepNext: true } }));
     if (sec.reference.length) out.push(H.itemTable(sec.reference[0], sec.reference.slice(1), { keepTogether: true }), gap(120));
-    if (sec.image) {
-      // reference diagram, max ~9.5 cm wide or 7 cm tall (docx sizes are in 96-dpi pixels);
-      // wide strips (aspect >= 2.5, e.g. a row of symbols) may use the full text width
-      const maxW = sec.image_w / sec.image_h >= 2.5 ? 640 : 360;
-      const scale = Math.min(maxW / sec.image_w, 265 / sec.image_h);
-      out.push(new Paragraph({
-        alignment: AlignmentType.CENTER, spacing: { after: 160 }, keepNext: true,
-        children: [new ImageRun({
-          type: path.extname(sec.image).toLowerCase() === '.png' ? 'png' : 'jpg',
-          data: fs.readFileSync(sec.image),
-          transformation: { width: Math.round(sec.image_w * scale), height: Math.round(sec.image_h * scale) },
-          altText: { title: sec.reference_title || 'Reference diagram', description: sec.credit, name: path.basename(sec.image) },
-        })],
-      }));
-    }
+    if (sec.image) out.push(worksheetImage(sec, sec.reference_title || 'Reference diagram'));
     for (const q of sec.questions) {
       out.push(new Paragraph({
         spacing: { before: 200, after: 40 }, keepNext: true,
@@ -164,6 +169,7 @@ function worksheet(L) {
           new TextRun({ text: `\t[${q.marks}]`, bold: true, size: 21 }),
         ],
       }));
+      if (q.image) out.push(worksheetImage(q, `Diagram for ${q.item}`, 80));
       out.push(...answerLines(q.lines));
     }
     if (sec !== W.sections[W.sections.length - 1]) out.push(gap(240));

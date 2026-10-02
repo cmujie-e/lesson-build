@@ -198,7 +198,7 @@ def parse_worksheet(lines):
         if line.startswith("### "):
             letter, _, marks = line[4:].partition("|")
             q = {"item": letter.strip(), "marks": int(marks.strip()), "text": [], "answer": "",
-                 "marking": "", "lines": None}
+                 "marking": "", "lines": None, "image": None, "credit": None, "source": None}
             sec["questions"].append(q)
         elif line.startswith("## "):
             letter, _, name = line[3:].partition("|")
@@ -226,7 +226,7 @@ def parse_worksheet(lines):
             elif line.strip():
                 sec["instructions"].append(line.strip())
         else:
-            for key in ("answer", "marking", "lines"):
+            for key in ("answer", "marking", "lines", "image", "credit", "source"):
                 if line.startswith(key + ":"):
                     val = line[len(key) + 1:].strip()
                     q[key] = int(val) if key == "lines" else val
@@ -246,22 +246,31 @@ def parse_worksheet(lines):
 
 
 def attach_worksheet_images(ws, base):
-    """Worksheet section images: resolve path, record size, require a credit. The credits
-    are printed as a line at the foot of the worksheet (Chapter 3 decision, 2026-09-25)."""
+    """Worksheet images, one per section and/or one per question: resolve path, record size,
+    require a credit. The credits are printed as a line at the foot of the worksheet (Chapter 3
+    decision, 2026-09-25); items sharing one credit are listed together under it."""
     from PIL import Image
-    ws["credits"] = []
-    for sec in ws["sections"]:
-        if not sec["image"]:
-            continue
-        path = os.path.normpath(os.path.join(base, sec["image"]))
+
+    def attach(obj, where):
+        path = os.path.normpath(os.path.join(base, obj["image"]))
         if not os.path.exists(path):
-            sys.exit(f"Worksheet section {sec['letter']}: image not found: {path}")
-        if not sec["credit"]:
-            sys.exit(f"Worksheet section {sec['letter']}: image has no credit: line")
+            sys.exit(f"Worksheet {where}: image not found: {path}")
+        if not obj["credit"]:
+            sys.exit(f"Worksheet {where}: image has no credit: line")
         with Image.open(path) as im:
-            sec["image_w"], sec["image_h"] = im.size
-        sec["image"] = path
-        ws["credits"].append(f"Section {sec['letter']}: {sec['credit']}")
+            obj["image_w"], obj["image_h"] = im.size
+        obj["image"] = path
+
+    by_credit = {}
+    for sec in ws["sections"]:
+        if sec["image"]:
+            attach(sec, f"section {sec['letter']}")
+            by_credit.setdefault(sec["credit"], []).append(f"Section {sec['letter']}")
+        for q in sec["questions"]:
+            if q["image"]:
+                attach(q, f"item {q['item']}")
+                by_credit.setdefault(q["credit"], []).append(q["item"])
+    ws["credits"] = [f"{', '.join(where)}: {credit}" for credit, where in by_credit.items()]
 
 
 def resolve_refs(obj, ids):
