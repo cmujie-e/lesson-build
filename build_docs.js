@@ -138,10 +138,12 @@ function worksheet(L) {
     if (sec.wordbank) out.push(H.noteBox(`Word bank:  ${sec.wordbank}`, { size: 22 }), gap(80));
     sec.instructions.forEach((t) => out.push(para(t, { italics: true, p: { keepNext: true } })));
     if (sec.reference_title) out.push(para(sec.reference_title, { bold: true, color: H.NAVY, p: { keepNext: true } }));
-    if (sec.reference.length) out.push(H.itemTable(sec.reference[0], sec.reference.slice(1)), gap(120));
+    if (sec.reference.length) out.push(H.itemTable(sec.reference[0], sec.reference.slice(1), { keepTogether: true }), gap(120));
     if (sec.image) {
-      // reference diagram, max ~9.5 cm wide or 7 cm tall (docx sizes are in 96-dpi pixels)
-      const scale = Math.min(360 / sec.image_w, 265 / sec.image_h);
+      // reference diagram, max ~9.5 cm wide or 7 cm tall (docx sizes are in 96-dpi pixels);
+      // wide strips (aspect >= 2.5, e.g. a row of symbols) may use the full text width
+      const maxW = sec.image_w / sec.image_h >= 2.5 ? 640 : 360;
+      const scale = Math.min(maxW / sec.image_w, 265 / sec.image_h);
       out.push(new Paragraph({
         alignment: AlignmentType.CENTER, spacing: { after: 160 }, keepNext: true,
         children: [new ImageRun({
@@ -182,7 +184,7 @@ function markScheme(L) {
     running += sec.marks;
     out.push(heading(`Section ${sec.letter}: ${sec.name} (${sec.marks} marks)   ·   running total ${running} / ${W.total}`));
     out.push(H.itemTable(['Item', 'Accepted answer', 'Marks'], sec.questions.map((q) => [q.item, q.answer, q.marks]), { widths: [9, 80, 11] }));
-    out.push(gap(200));
+    out.push(gap(120));
   }
   const sum = W.sections.map((s) => s.marks).join(' + ');
   out.push(H.banner(`CORE TOTAL: ${sum} = ${W.total} marks`, { size: 26 }));

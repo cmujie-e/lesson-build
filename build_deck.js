@@ -137,8 +137,15 @@ function layoutTable(slide, s) {
       ? { bold: true, color: S.WHITE, fill: { color: S.DOT } }
       : { color: S.NAVY, fill: { color: ri % 2 ? S.WHITE : S.LIGHT_GREY } },
   })));
+  // optional lead line(s) above the table, e.g. the question on a hingepoint table slide
+  let top = AREA.y;
+  if (s.text.length) {
+    const leadH = 0.6 * s.text.length + 0.15;
+    slide.addText(paraRuns(s.text), { x: AREA.x, y: AREA.y, w: AREA.w, h: leadH, ...BODY, bold: true, valign: 'top' });
+    top += leadH + 0.1;
+  }
   slide.addTable(data, {
-    x: AREA.x, y: AREA.y, w: AREA.w, colW, fontFace: 'Calibri', fontSize: BODY_PT,
+    x: AREA.x, y: top, w: AREA.w, colW, fontFace: 'Calibri', fontSize: BODY_PT,
     border: { type: 'solid', pt: 1, color: S.ICE_BLUE }, valign: 'middle', margin: 0.08, rowH: 0.72,
   });
 }
@@ -230,9 +237,11 @@ function layoutImage(slide, s) {
   const wide = s.image_w / s.image_h >= 2.2;
   const img = { path: s.image, altText: s.credit };
   if (wide) {
-    const textH = 2.75;
-    slide.addText(runs, { x: AREA.x, y: AREA.y, w: AREA.w, h: textH, ...BODY, valign: 'top' });
-    slide.addImage({ ...img, ...fit(s, AREA.x, AREA.y + textH + 0.15, AREA.w, AREA.h - textH - 0.15) });
+    // no text: the image gets the whole content area instead of sitting under an empty text band
+    const textH = runs.length ? 2.75 : 0;
+    const gap = runs.length ? 0.15 : 0;
+    if (runs.length) slide.addText(runs, { x: AREA.x, y: AREA.y, w: AREA.w, h: textH, ...BODY, valign: 'top' });
+    slide.addImage({ ...img, ...fit(s, AREA.x, AREA.y + textH + gap, AREA.w, AREA.h - textH - gap) });
   } else {
     // landscape images (e.g. Figure 3.7 with its small labels) get more width than portrait ones
     const textW = !runs.length ? 0 : s.image_w / s.image_h >= 1.3 ? 5.5 : 6.3;
