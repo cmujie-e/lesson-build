@@ -6,6 +6,7 @@ Usage:
                                                         output goes to out/ only, never the lesson folder
   python lesson.py check <content.md> [output_folder]   checks and inspection sheets only
   python lesson.py outline <content.md>                 one-page review summary (out/<lesson>/review.md)
+  python lesson.py mcq <mcq.md> [output_folder]         chapter unit MCQ: question paper + answer key, checked
 
 output_folder defaults to the folder holding content.md. The course rules (word limit, font
 size, which documents, file names, lesson length) come from the nearest course.json above
@@ -134,12 +135,60 @@ def render_and_check(dest, work, L, files, content):
     return ok
 
 
+def mcq(src, dest):
+    """Unit MCQ: parse mcq.md -> paper + key (Word) -> paper to PDF -> render -> MCQ and layout checks."""
+    work = work_dir(dest, False)
+    os.makedirs(work, exist_ok=True)
+    locked = glob.glob(os.path.join(dest, "~$*"))
+    if locked:
+        sys.exit(f"FAILED: close these files first (open in Office): {[os.path.basename(f) for f in locked]}")
+    mj = os.path.join(work, "mcq.json")
+    print("1. Parse mcq.md")
+    run(PY, "parse_mcq.py", src, mj)
+    M = json.load(open(mj, encoding="utf-8"))
+    files = {d["type"]: fill(d["file"], M["meta"]) for d in M["config"]["unit_mcq"]["documents"]}
+    print("2. Word documents")
+    run(NODE, "build_mcq.js", mj, work)
+    print("3. Word -> delivery format")
+    pdfs = {}
+    for t, f in files.items():
+        docx = os.path.join(work, os.path.splitext(f)[0] + ".docx")
+        if f.lower().endswith(".pdf"):
+            pdfs[t] = to_pdf(docx, work)
+            shutil.copy2(pdfs[t], dest)
+        else:
+            shutil.copy2(docx, dest)
+            pdfs[t] = to_pdf(os.path.join(dest, f), work)
+        print(f"  {f}")
+    print("4. Render pages")
+    render, qa = os.path.join(work, "render"), os.path.join(work, "qa")
+    for d in (render, qa):
+        os.makedirs(d, exist_ok=True)
+    for t, f in files.items():
+        stem = os.path.splitext(f)[0]
+        for old in glob.glob(os.path.join(render, f"{stem}-*.jpg")) + glob.glob(os.path.join(qa, f"{stem}_[0-9]*.jpg")):
+            os.remove(old)
+        run(PDFTOPPM, "-jpeg", "-r", "60", pdfs[t], os.path.join(render, stem))
+        run(PY, "montage.py", os.path.join(render, f"{stem}-*.jpg"), os.path.join(qa, stem), 4, 8, quiet=True)
+        print(f"  {f}: {len(glob.glob(os.path.join(render, stem + '-[0-9]*.jpg')))} pages")
+    print("\n5. MCQ check")
+    ok = run(PY, "check_mcq.py", dest, mj, check=False) == 0
+    print("\n6. Layout check")
+    ok &= run(PY, "check_layout.py", mj, "-", *pdfs.values(), check=False) == 0
+    print(f"\nInspection sheets: {qa}")
+    print("RESULT:", "PASS" if ok else "FAIL")
+    return ok
+
+
 def main():
     # output may go to a file or pipe with a non-UTF-8 code page (cp1252), which cannot print the check reports
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    if len(sys.argv) < 3 or sys.argv[1] not in ("build", "draft", "check", "outline"):
+    if len(sys.argv) < 3 or sys.argv[1] not in ("build", "draft", "check", "outline", "mcq"):
         sys.exit(__doc__)
     mode, content = sys.argv[1], os.path.abspath(sys.argv[2])
+    if mode == "mcq":
+        dest = os.path.abspath(sys.argv[3]) if len(sys.argv) > 3 else os.path.dirname(content)
+        sys.exit(0 if mcq(content, dest) else 1)
     if mode == "outline":
         sys.exit(run(PY, "outline.py", content, check=False))
     if mode == "draft":
