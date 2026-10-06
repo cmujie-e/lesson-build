@@ -9,27 +9,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-const {
-  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType,
-  ShadingType, BorderStyle, AlignmentType, TabStopType, LevelFormat, ImageRun,
-} = require('docx');
+const { Paragraph, TextRun, TabStopType } = require('docx');
 const H = require('./lib/docx_helpers');
 
-const PAGE = { size: { width: 11906, height: 16838 }, margin: { top: 1000, bottom: 1000, left: 1100, right: 1100 } };
-const FONT = 'Calibri';
-const NUMBERING = {
-  config: [{
-    reference: 'bullets',
-    levels: [{ level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 400, hanging: 260 } } } }],
-  }],
-};
-
-const gap = (after = 160) => new Paragraph({ spacing: { after }, children: [] });
-const para = (text, opts = {}) => new Paragraph({
-  spacing: { after: 100 }, ...opts.p,
-  children: [new TextRun({ text, size: opts.size || 21, bold: opts.bold, italics: opts.italics, color: opts.color || '000000' })],
-});
-const bullet = (text) => new Paragraph({ numbering: { reference: 'bullets', level: 0 }, spacing: { after: 60 }, children: [new TextRun({ text, size: 21 })] });
+const { gap, para, bullet, heading, save } = H;
 
 /** "Label: text" lines get a bold label, used in the speaker notes. */
 function labelled(line) {
@@ -55,18 +38,6 @@ function blocksToDocx(blocks) {
   return out;
 }
 
-/**
- * Navy section heading as a shaded paragraph rather than H.banner's one-cell table:
- * a paragraph can carry keepNext, so the heading never sits alone at the foot of a page.
- */
-const heading = (text) => new Paragraph({
-  keepNext: true,
-  spacing: { before: 120, after: 140 },
-  shading: { type: ShadingType.CLEAR, fill: H.NAVY },
-  indent: { left: 60, right: 60 },
-  children: [new TextRun({ text: ` ${text}`, bold: true, color: H.WHITE, size: 24 })],
-});
-
 function sectionsToDocx(sections, placeholders = {}) {
   const out = [];
   sections.forEach((s, i) => {
@@ -78,16 +49,6 @@ function sectionsToDocx(sections, placeholders = {}) {
     if (i < sections.length - 1) out.push(gap(200));
   });
   return out;
-}
-
-async function save(children, file) {
-  const doc = new Document({
-    styles: { default: { document: { run: { font: FONT } } } },
-    numbering: NUMBERING,
-    sections: [{ properties: { page: PAGE }, children }],
-  });
-  fs.writeFileSync(file, await Packer.toBuffer(doc));
-  console.log(`  ${path.basename(file)}`);
 }
 
 // ---------- Speaker notes ----------
@@ -115,50 +76,16 @@ function answerLines(n) {
   }));
 }
 
-function nameRow(total) {
-  const cell = (children, w, fill) => new TableCell({
-    width: { size: w, type: WidthType.PERCENTAGE }, children, margins: { top: 120, bottom: 120, left: 140, right: 140 },
-    shading: fill ? { type: ShadingType.CLEAR, fill } : undefined,
-  });
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [new TableRow({ children: [
-      cell([para('Name: ______________________________'), para('Class: ____________   Date: ____________')], 72),
-      cell([new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Total: ____ / ${total}`, bold: true, size: 28, color: H.NAVY })] })], 28, H.CFU_BG),
-    ] })],
-  });
-}
-
-/**
- * A worksheet diagram (section reference or per-question), max ~9.5 cm wide or 7 cm tall
- * (docx sizes are in 96-dpi pixels); wide strips (aspect >= 2.5, e.g. a row of symbols) may use
- * the full text width; an explicit width: overrides both. keepNext holds it to the lines that follow.
- */
-function worksheetImage(obj, title, before = 0) {
-  // "width: <cm>" in content.md sets the printed width (capped at the text width, 17 cm)
-  const maxW = obj.width ? Math.min(obj.width * 37.8, 640) : obj.image_w / obj.image_h >= 2.5 ? 640 : 360;
-  const scale = Math.min(maxW / obj.image_w, (obj.width ? 400 : 265) / obj.image_h);
-  return new Paragraph({
-    alignment: AlignmentType.CENTER, spacing: { before, after: 160 }, keepNext: true,
-    children: [new ImageRun({
-      type: path.extname(obj.image).toLowerCase() === '.png' ? 'png' : 'jpg',
-      data: fs.readFileSync(obj.image),
-      transformation: { width: Math.round(obj.image_w * scale), height: Math.round(obj.image_h * scale) },
-      altText: { title, description: obj.credit, name: path.basename(obj.image) },
-    })],
-  });
-}
-
 function worksheet(L) {
   const W = L.worksheet;
   const out = header(L.meta, `Lesson ${L.meta.lesson} Worksheet: ${L.meta.topic}`);
-  out.push(nameRow(W.total), gap(120), para(W.intro, { italics: true }), gap(120));
+  out.push(H.nameRow(W.total), gap(120), para(W.intro, { italics: true }), gap(120));
   for (const sec of W.sections) {
     out.push(heading(`Section ${sec.letter}: ${sec.name}   ·   ${sec.marks} mark${sec.marks === 1 ? '' : 's'}`));
     if (sec.wordbank) out.push(H.noteBox(`Word bank:  ${sec.wordbank}`, { size: 22 }), gap(80));
     sec.instructions.forEach((t) => out.push(para(t, { italics: true, p: { keepNext: true } })));
     // a section image comes before its reference table (e.g. a circuit, then the table to complete for it)
-    if (sec.image) out.push(worksheetImage(sec, sec.reference_title || 'Reference diagram'));
+    if (sec.image) out.push(H.docImage(sec, sec.reference_title || 'Reference diagram'));
     if (sec.reference_title) out.push(para(sec.reference_title, { bold: true, color: H.NAVY, p: { keepNext: true } }));
     if (sec.reference.length) out.push(H.itemTable(sec.reference[0], sec.reference.slice(1), { keepTogether: true }), gap(120));
     for (const q of sec.questions) {
@@ -171,7 +98,7 @@ function worksheet(L) {
           new TextRun({ text: `\t[${q.marks}]`, bold: true, size: 21 }),
         ],
       }));
-      if (q.image) out.push(worksheetImage(q, `Diagram for ${q.item}`, 80));
+      if (q.image) out.push(H.docImage(q, `Diagram for ${q.item}`, 80));
       out.push(...answerLines(q.lines));
     }
     if (sec !== W.sections[W.sections.length - 1]) out.push(gap(240));

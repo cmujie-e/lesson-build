@@ -18,6 +18,8 @@ The scripts build and check; they do not write lesson content. Writing `content.
    from the plan, run `factcheck.py` and `lesson.py draft`, review the summary from
    `lesson.py outline` and the image list, then download, `lesson.py build`, inspect, commit.
 4. Finish one lesson (built, checked, inspected) before starting the next.
+5. After the last lesson, write and build the chapter's **unit MCQ** (see below), drawing on
+   each lesson's assessment plan "Feeding Forward" section.
 
 ## One-time setup on a new PC
 
@@ -54,6 +56,20 @@ python lesson.py outline "<lesson folder>\content.md"               # review sum
 ```
 `factcheck.py` also reads the chapter from a `source_pdf:` line in the content.md front matter.
 
+## Building the unit MCQ
+
+One per chapter (ICT Faculty policy: 15–20 questions per unit). Copy `templates\mcq_template.md`
+to `<chapter folder>\Unit_MCQ\mcq.md`; its comment block documents the format. Then:
+
+```
+python lesson.py mcq "<chapter folder>\Unit_MCQ\mcq.md"   # build paper + answer key next to mcq.md, then check
+```
+
+It writes the student question paper (PDF: questions, answer grid, no answers) and the teacher
+answer key (Word: summary, lesson coverage, letter distribution, and why each wrong option is
+wrong), renders contact sheets to `out\<chapter>_Unit_MCQ\qa`, and runs `check_mcq.py` and the
+layout check. The rules come from the `unit_mcq` block of course.json.
+
 ## Finding images
 
 ```
@@ -79,6 +95,7 @@ Chapter 3 version; copy it as a starting point. Fields:
 | `slides.chrome_pt` | Footer, page number and tag sizes (exempt from the rules above) |
 | `slides.question_tags`, `answer_marker` | Slides that must have an answer in their notes |
 | `slides.tag_colors`, `box_colors` | Palette names from `lib\style.js` |
+| `unit_mcq` | Chapter unit MCQ: `min_questions`, `max_questions`, `options` per question, `max_letter_share` (most questions one letter may answer), `max_run` (longest run of one letter), and `documents` (`mcq_paper`, `mcq_key`) with `{prefix}` file names |
 | `documents` | The deliverables: `type` (deck, speaker_notes, glossary, worksheet, mark_scheme, lesson_plan, assessment_plan) and `file` name pattern using `{prefix}` / `{deck_name}`; `.pdf` names are converted from Word |
 
 Document types not listed above (for example a submission sheet) are not built yet;
@@ -88,7 +105,7 @@ Document types not listed above (for example a submission sheet) are not built y
 
 | File | Job |
 |---|---|
-| `lesson.py` | One command: build, check, render |
+| `lesson.py` | One command: build, check, render (lessons and the unit MCQ) |
 | `parse_content.py` | content.md -> lesson.json (resolves `@slide` references, images, credits) |
 | `build_deck.js` | Slide deck (pptxgenjs) |
 | `build_docs.js` | Speaker notes, worksheet, mark scheme, lesson plan, assessment plan (docx) |
@@ -97,6 +114,9 @@ Document types not listed above (for example a submission sheet) are not built y
 | `check_bundle.py` | Files present, answer keys match, marks add up, timing, placeholders |
 | `check_layout.py` | Rendered pages: slide text overflow, near-empty pages, stranded headings, mid-word breaks |
 | `check_glossary.py` | Same term, same translations, across every lesson under the course.json folder |
+| `parse_mcq.py` | mcq.md -> mcq.json (unit MCQ) |
+| `build_mcq.js` | Unit MCQ question paper and answer key (docx) |
+| `check_mcq.py` | Unit MCQ: question count, options, reasons, lesson coverage, answer balance, no answers on the paper, key matches source |
 | `factcheck.py` | Lists numbers, figure/table references and textbook quotes not found in the chapter |
 | `outline.py` | One-page review summary (`lesson.py outline`) |
 | `toolpaths.py` | Finds poppler, LibreOffice and Node (skips Git's older xpdf `pdftotext`) |

@@ -1,6 +1,6 @@
 """Layout checks on the rendered PDFs, for problems found by eye in earlier builds.
 
-Usage: python check_layout.py <lesson.json> <deck.pdf> <doc.pdf> [<doc.pdf> ...]
+Usage: python check_layout.py <lesson.json|mcq.json> <deck.pdf|-> <doc.pdf> [<doc.pdf> ...]
 (lesson.py runs this after rendering; the PDFs are the deck and every document as rendered.)
 
   1. Slide text overflow    words below the content area or past the right edge of a slide
@@ -89,6 +89,10 @@ def midword(pdf, name, vocab):
 
 
 def headings_of(L):
+    """Section headings of a lesson.json, or of an mcq.json (unit MCQ: paper and answer key)."""
+    if "questions" in L:
+        return ["Answer grid", "Answer summary", "Lesson coverage", "Answer distribution",
+                "Question-by-question rationale"] + [f"Question {q['number']} ·" for q in L["questions"]]
     hs = [f"Section {s['letter']}:" for s in L["worksheet"]["sections"]]
     hs += [s["heading"] for s in L["lesson_plan"] + L["assessment_plan"] if s.get("heading")]
     hs += [f"Slide {i} ·" for i in range(1, len(L["slides"]) + 1)]
