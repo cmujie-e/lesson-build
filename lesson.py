@@ -139,6 +139,7 @@ def mcq(src, dest):
     """Unit MCQ: parse mcq.md -> paper + key (Word) -> paper to PDF -> render -> MCQ and layout checks."""
     work = work_dir(dest, False)
     os.makedirs(work, exist_ok=True)
+    os.makedirs(dest, exist_ok=True)  # else shutil.copy2 writes the key to a FILE named like the folder
     locked = glob.glob(os.path.join(dest, "~$*"))
     if locked:
         sys.exit(f"FAILED: close these files first (open in Office): {[os.path.basename(f) for f in locked]}")
