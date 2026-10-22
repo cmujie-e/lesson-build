@@ -44,7 +44,8 @@ def key(term):
 def lesson_files(chapter):
     found = []
     for p in glob.glob(os.path.join(chapter, "**", "content.md"), recursive=True):
-        if re.search(r"[\\/](_archive|_duplicates|out|_build)[\\/]", p):
+        rel = os.path.relpath(p, chapter)  # only folders inside the chapter count
+        if re.search(r"(^|[\\/])(_archive|_duplicates|out|_build)[\\/]", rel):
             continue
         with open(p, encoding="utf-8-sig") as f:
             front, sections = split_sections(f.read())

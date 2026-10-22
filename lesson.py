@@ -43,6 +43,8 @@ def run(*args, quiet=False, check=True):
     if check and r.returncode != 0:
         print(r.stdout if quiet else "", r.stderr)
         sys.exit(f"FAILED: {os.path.basename(str(args[1]))}")
+    if not check and r.returncode != 0 and r.stderr.strip():
+        print(r.stderr.rstrip())  # e.g. a sys.exit("...") message from a sub-script
     return r.returncode
 
 
