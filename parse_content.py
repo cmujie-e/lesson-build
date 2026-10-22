@@ -185,7 +185,7 @@ def attach_images(slides, base):
             "subtitle": None, "diagram": None, "image": None, "credit": None,
             "bullets": credits, "cards": [], "table": [], "text": [],
             "notes": "Image credits for every image in this deck. This slide is exempt from the 30 pt and "
-                     "35-word rules (Chapter 3 CLAUDE.md). Textbook figures are used under the school's licence.",
+                     "35-word rules (the chapter's CLAUDE.md). Textbook figures are used under the school's licence.",
         })
     return slides
 
@@ -249,7 +249,7 @@ def parse_worksheet(lines):
 
 def attach_worksheet_images(ws, base):
     """Worksheet images, one per section and/or one per question: resolve path, record size,
-    require a credit. The credits are printed as a line at the foot of the worksheet (Chapter 3
+    require a credit. The credits are printed as a line at the foot of the worksheet (course
     decision, 2026-09-25); items sharing one credit are listed together under it."""
     from PIL import Image
 

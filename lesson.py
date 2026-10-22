@@ -7,6 +7,9 @@ Usage:
   python lesson.py check <content.md> [output_folder]   checks and inspection sheets only
   python lesson.py outline <content.md>                 one-page review summary (out/<lesson>/review.md)
   python lesson.py mcq <mcq.md> [output_folder]         chapter unit MCQ: question paper + answer key, checked
+  python lesson.py form <mcq.md>                        Google Forms version of the unit MCQ (Apps Script)
+  python lesson.py guide <guide.md> [out.docx]          teacher guide (Word) + page renders for inspection
+  python lesson.py glossary-review <chapter folder>     review workbook of every glossary term, for colleagues
 
 output_folder defaults to the folder holding content.md. The course rules (word limit, font
 size, which documents, file names, lesson length) come from the nearest course.json above
@@ -181,12 +184,46 @@ def mcq(src, dest):
     return ok
 
 
+def guide(src, out=None):
+    """Teacher guide: guide.md -> Word (build_guide.py) -> PDF -> page renders + contact sheet to inspect.
+    Default output: a source in <chapter>/Teacher Guides/_source/ builds into <chapter>/Teacher Guides/."""
+    if out is None:
+        folder = os.path.dirname(src)
+        if os.path.basename(folder) == "_source":
+            folder = os.path.dirname(folder)
+        out = os.path.join(folder, os.path.splitext(os.path.basename(src))[0] + ".docx")
+    out = os.path.abspath(out)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    if os.path.exists(os.path.join(os.path.dirname(out), "~$" + os.path.basename(out)[2:])):
+        sys.exit(f"FAILED: close {os.path.basename(out)} in Word first")
+    stem = os.path.splitext(os.path.basename(out))[0]
+    work = os.path.join(HERE, "out", "guide_" + stem)
+    os.makedirs(work, exist_ok=True)
+    print("1. Build Word document")
+    run(PY, "build_guide.py", src, out)
+    print("2. Render pages")
+    pdf = to_pdf(out, work)
+    for old in glob.glob(os.path.join(work, f"{stem}-*.jpg")) + glob.glob(os.path.join(work, f"{stem}_qa_*.jpg")):
+        os.remove(old)
+    run(PDFTOPPM, "-jpeg", "-r", "60", pdf, os.path.join(work, stem))
+    pages = glob.glob(os.path.join(work, f"{stem}-*.jpg"))
+    run(PY, "montage.py", os.path.join(work, f"{stem}-*.jpg"), os.path.join(work, stem + "_qa"), 4, 8, quiet=True)
+    print(f"  {len(pages)} pages; inspection sheets: {work}")
+    return True
+
+
 def main():
     # output may go to a file or pipe with a non-UTF-8 code page (cp1252), which cannot print the check reports
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    if len(sys.argv) < 3 or sys.argv[1] not in ("build", "draft", "check", "outline", "mcq"):
+    if len(sys.argv) < 3 or sys.argv[1] not in ("build", "draft", "check", "outline", "mcq", "form", "guide", "glossary-review"):
         sys.exit(__doc__)
     mode, content = sys.argv[1], os.path.abspath(sys.argv[2])
+    if mode == "form":
+        sys.exit(run(PY, "make_form.py", content, check=False))
+    if mode == "glossary-review":
+        sys.exit(run(PY, "glossary_review.py", content, check=False))
+    if mode == "guide":
+        sys.exit(0 if guide(content, sys.argv[3] if len(sys.argv) > 3 else None) else 1)
     if mode == "mcq":
         dest = os.path.abspath(sys.argv[3]) if len(sys.argv) > 3 else os.path.dirname(content)
         sys.exit(0 if mcq(content, dest) else 1)
